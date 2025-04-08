@@ -1,0 +1,8 @@
+/mnt/scratch-artemis/anilkeshwani/tmp/st/mls-train-audio/100_2315_000006.flac	/mnt/scratch-artemis/anilkeshwani/tmp/st/mls-train-reps/100_2315_000006.hubert.npy
+/mnt/scratch-artemis/anilkeshwani/tmp/st/mls-train-audio/100_2315_000008.flac	/mnt/scratch-artemis/anilkeshwani/tmp/st/mls-train-reps/100_2315_000008.hubert.npy
+/mnt/scratch-artemis/anilkeshwani/tmp/st/mls-train-audio/100_2315_000003.flac	/mnt/scratch-artemis/anilkeshwani/tmp/st/mls-train-reps/100_2315_000003.hubert.npy
+/mnt/scratch-artemis/anilkeshwani/tmp/st/mls-train-audio/100_2315_000004.flac	/mnt/scratch-artemis/anilkeshwani/tmp/st/mls-train-reps/100_2315_000004.hubert.npy
+/mnt/scratch-artemis/anilkeshwani/tmp/st/mls-train-audio/100_2315_000009.flac	/mnt/scratch-artemis/anilkeshwani/tmp/st/mls-train-reps/100_2315_000009.hubert.npy
+/mnt/scratch-artemis/anilkeshwani/tmp/st/mls-train-audio/100_2315_000007.flac	/mnt/scratch-artemis/anilkeshwani/tmp/st/mls-train-reps/100_2315_000007.hubert.npy
+/mnt/scratch-artemis/anilkeshwani/tmp/st/mls-train-audio/100_2315_000001.flac	/mnt/scratch-artemis/anilkeshwani/tmp/st/mls-train-reps/100_2315_000001.hubert.npy
+/mnt/scratch-artemis/anilkeshwani/tmp/st/mls-train-audio/100_2315_000005.flac	/mnt/scratch-artemis/anilkeshwani/tmp/st/mls-train-reps/100_2315_000005.hubert.npy

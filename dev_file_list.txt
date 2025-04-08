@@ -1,0 +1,2 @@
+/mnt/scratch-artemis/anilkeshwani/tmp/st/mls-train-audio/100_2315_000002.flac	/mnt/scratch-artemis/anilkeshwani/tmp/st/mls-train-reps/100_2315_000002.hubert.npy
+/mnt/scratch-artemis/anilkeshwani/tmp/st/mls-train-audio/100_2315_000000.flac	/mnt/scratch-artemis/anilkeshwani/tmp/st/mls-train-reps/100_2315_000000.hubert.npy
