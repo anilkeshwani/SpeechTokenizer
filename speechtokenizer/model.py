@@ -83,12 +83,12 @@ class SpeechTokenizer(nn.Module):
         model.load_state_dict(params)
         return model
 
-    def forward(self, x: torch.tensor, n_q: int = None, layers: list = [0]):
+    def forward(self, x: torch.Tensor, n_q: int | None = None, layers: list = [0]):
         """
 
         Parameters
         ----------
-        x : torch.tensor
+        x : torch.Tensor
             Input wavs. Shape: (batch, channels, timesteps).
         n_q : int, optional
             Number of quantizers in RVQ used to encode. The default is all layers.
@@ -97,11 +97,11 @@ class SpeechTokenizer(nn.Module):
 
         Returns
         -------
-        o : torch.tensor
+        o : torch.Tensor
             Output wavs. Shape: (batch, channels, timesteps).
-        commit_loss : torch.tensor
+        commit_loss : torch.Tensor
             Commitment loss from residual vector quantizers.
-        feature : torch.tensor
+        feature : torch.Tensor
             Output of RVQ's first layer. Shape: (batch, timesteps, dimension)
 
         """
@@ -113,12 +113,12 @@ class SpeechTokenizer(nn.Module):
         o = self.decoder(quantized)
         return o, commit_loss, feature
 
-    def forward_feature(self, x: torch.tensor, layers: list = None):
+    def forward_feature(self, x: torch.Tensor, layers: list | None = None):
         """
 
         Parameters
         ----------
-        x : torch.tensor
+        x : torch.Tensor
             Input wavs. Shape should be (batch, channels, timesteps).
         layers : list[int], optional
             Layers of RVQ should return quantized result. The default is all layers.
@@ -134,12 +134,12 @@ class SpeechTokenizer(nn.Module):
         quantized, codes, commit_loss, quantized_list = self.quantizer(e, layers=layers)
         return quantized_list
 
-    def encode(self, x: torch.tensor, n_q: int = None, st: int = None):
+    def encode(self, x: torch.Tensor, n_q: int | None = None, st: int | None = None):
         """
 
         Parameters
         ----------
-        x : torch.tensor
+        x : torch.Tensor
             Input wavs. Shape: (batch, channels, timesteps).
         n_q : int, optional
             Number of quantizers in RVQ used to encode. The default is all layers.
@@ -148,7 +148,7 @@ class SpeechTokenizer(nn.Module):
 
         Returns
         -------
-        codes : torch.tensor
+        codes : torch.Tensor
             Output indices for each quantizer. Shape: (n_q, batch, timesteps)
 
         """
@@ -159,19 +159,19 @@ class SpeechTokenizer(nn.Module):
         codes = self.quantizer.encode(e, n_q=n_q, st=st)
         return codes
 
-    def decode(self, codes: torch.tensor, st: int = 0):
+    def decode(self, codes: torch.Tensor, st: int = 0):
         """
 
         Parameters
         ----------
-        codes : torch.tensor
+        codes : torch.Tensor
             Indices for each quantizer. Shape: (n_q, batch, timesteps).
         st : int, optional
             Start quantizer index in RVQ. The default is 0.
 
         Returns
         -------
-        o : torch.tensor
+        o : torch.Tensor
             Reconstruct wavs from codes. Shape: (batch, channels, timesteps)
 
         """
