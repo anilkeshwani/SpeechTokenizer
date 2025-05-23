@@ -5,6 +5,7 @@ import os
 import sys
 import warnings
 from pathlib import Path
+from typing import Any
 
 import torch
 import torchaudio
@@ -82,8 +83,10 @@ def stok_encode_mls(idx_block: int, out_file: Path):
             codes = model.encode(wav.to(DEVICE).unsqueeze(0)).squeeze(1)  # codes: (n_q, T)
 
             # Write RVQ codes to file
-            stok_rvqs: dict[int, list[int]] = {idx_q: st.tolist() for idx_q, st in enumerate(codes)}
-            f.write(json.dumps({mls_id: stok_rvqs}) + "\n")
+            stok_rvqs: dict[str, list[int]] = {f"RVQ_{idx_q}": st.tolist() for idx_q, st in enumerate(codes)}
+            stok_sample: dict[str, Any] = {"ID": mls_id} | stok_rvqs
+
+            f.write(json.dumps(stok_sample) + "\n")
 
 
 def main():
