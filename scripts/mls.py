@@ -1,9 +1,18 @@
 #!/usr/bin/env python
 
+"""
+Encode the Multilingual LibriSpeech (MLS) dataset using SpeechTokenizer.
+
+Recall:
+RVQ 0          -> Contains content info, can be considered as semantic tokens
+RVQs 1 onwards -> Contain timbre info, complete info lost by the first quantizer
+"""
+
 import json
 import os
-import sys
 import warnings
+from argparse import ArgumentParser, Namespace
+from math import ceil
 from pathlib import Path
 from typing import Any
 
@@ -13,22 +22,36 @@ from speechtokenizer import SpeechTokenizer
 from tqdm import tqdm
 
 
-# NOTE
-# RVQ 0: Contains content info, can be considered as semantic tokens
-# RVQs 1 onwards: Contain timbre info, complete info lost by the first quantizer
+# Constants
+MLS_SIZES = {"train": 10_808_037, "dev": 3_807, "test": 3_769}
+DEVICE = torch.device("cuda")  # leave GPU assignment to Slurm
 
-BLOCK_SIZE = 100_000  # ~3:20 (3.3 hours) based on 500 samples/minute from testing
-# BLOCK_SIZE = 50  # testing
-MLS_TRAIN_SIZE = 10_808_037  # number of samples in MLS train set
-
+# SpeechTokenizer Model
 ST_MODEL_DIR = "/mnt/scratch-artemis/anilkeshwani/models/SpeechTokenizer/speechtokenizer_hubert_avg"
 CONFIG_PATH = os.path.join(ST_MODEL_DIR, "config.json")
 CKPT_PATH = os.path.join(ST_MODEL_DIR, "SpeechTokenizer.pt")
-MLS_TRAIN_SEGMENTS = "/mnt/scratch-artemis/shared/datasets/MLS/train/segments.txt"
-MLS_TRAIN_AUDIO_DIR = Path("/mnt/scratch-artemis/shared/datasets/MLS/train/audio")
-OUTPUT_DIR = Path("/mnt/scratch-artemis/anilkeshwani/stok-mls")  # must exist
 
-DEVICE = torch.device("cuda")  # leave GPU assignment to Slurm
+# Local MLS Dataset Paths
+_MLS_SEGMENTS_PATH = "/mnt/scratch-artemis/shared/datasets/MLS/{}/segments.txt"
+_MLS_AUDIO_DIR = "/mnt/scratch-artemis/shared/datasets/MLS/{}/audio"
+
+
+def parse_args() -> Namespace:
+    parser = ArgumentParser(description="Encode MLS dataset with SpeechTokenizer.")
+    # Required
+    parser.add_argument("idx_block", type=int, help="Block index to process (0-based)")
+    parser.add_argument("--split", type=str, required=True, choices=["train", "dev", "test"])
+    # Optional
+    parser.add_argument("--block_size", type=int, default=100_000)  # ~3:20 (3.3 hours) based on 500 samples/min tested
+    parser.add_argument("--output_jsonl", type=Path)
+    args = parser.parse_args()
+
+    if args.idx_block < 0 or args.idx_block * args.block_size >= MLS_SIZES[args.split]:
+        raise ValueError(
+            f"Invalid block index {args.idx_block} for split '{args.split}' and block size {args.block_size}."
+        )
+
+    return args
 
 
 def mls_id_to_path(mls_id: str, audio_dir: Path, suffix: str = ".flac") -> Path:
@@ -47,27 +70,36 @@ def mls_id_to_path(mls_id: str, audio_dir: Path, suffix: str = ".flac") -> Path:
 
 
 @torch.inference_mode()
-def stok_encode_mls(idx_block: int, out_file: Path):
+def stok_encode_mls(idx_block: int, block_size: int, split: str, output_jsonl: Path | None):
     model = SpeechTokenizer.load_from_checkpoint(CONFIG_PATH, CKPT_PATH)
     model.eval()
     model.to(DEVICE)
 
-    mls_ids: list[str] = []
-    with open(MLS_TRAIN_SEGMENTS, "r") as f:
-        for i, line in enumerate(f):
-            mls_ids.append(line.strip().split(None, 1)[0])
+    mls_split_size = MLS_SIZES[split]
+    mls_segments = _MLS_SEGMENTS_PATH.format(split)
+    mls_audio_dir = Path(_MLS_AUDIO_DIR.format(split))
+    n_blocks = ceil(mls_split_size / block_size)
 
-    assert len(mls_ids) == MLS_TRAIN_SIZE
+    with open(mls_segments, "r") as f:
+        mls_ids: list[str] = [line.strip().split(None, 1)[0] for line in f]
+
+    if len(mls_ids) != mls_split_size:
+        raise ValueError(f"Expected {mls_split_size} MLS IDs in {mls_segments}, but found {len(mls_ids)}.")
 
     # Get the block of MLS IDs to process
-    start_idx = idx_block * BLOCK_SIZE
-    end_idx = min((idx_block + 1) * BLOCK_SIZE, MLS_TRAIN_SIZE)
+    start_idx = idx_block * block_size
+    end_idx = min((idx_block + 1) * block_size, mls_split_size)
     mls_ids = mls_ids[start_idx:end_idx]
 
-    with open(out_file, "x") as f:
+    if output_jsonl is None:
+        idx_block_label = str(idx_block + 1).zfill(len(str(n_blocks)))  # NOTE 1-indexed block label
+        jsonl_filename = f"{split}-mls-speechtokenizer-{idx_block_label}-of-{n_blocks}.jsonl"
+        output_jsonl = Path("/mnt/scratch-artemis/anilkeshwani/mls-speechtokenizer-jsonl") / split / jsonl_filename
+
+    with open(output_jsonl, "x") as f:
         for mls_id in tqdm(mls_ids, desc="Processing MLS with SpeechTokenizer"):
             # Load and pre-process speech waveform
-            wav, sr = torchaudio.load(mls_id_to_path(mls_id, MLS_TRAIN_AUDIO_DIR))
+            wav, sr = torchaudio.load(mls_id_to_path(mls_id, mls_audio_dir))
 
             # monophonic checking
             if wav.size(0) > 1:
@@ -88,20 +120,8 @@ def stok_encode_mls(idx_block: int, out_file: Path):
 
             f.write(json.dumps(stok_sample) + "\n")
 
-
-def main():
-    idx_block = int(sys.argv[1])  # start from 0
-
-    # Check block index is valid
-    if idx_block < 0 or idx_block * BLOCK_SIZE >= MLS_TRAIN_SIZE:
-        raise ValueError(f"Invalid block index {idx_block}. Must be between 0 and {MLS_TRAIN_SIZE // BLOCK_SIZE}.")
-
-    out_file = OUTPUT_DIR / f"stok_mls_{idx_block!s}.jsonl"
-
-    stok_encode_mls(idx_block, out_file)
-
-    print(f"Completed. Encoded block {idx_block} to {out_file}.")
+    print(f"Completed. Encoded block {idx_block} to {output_jsonl}.")
 
 
 if __name__ == "__main__":
-    main()
+    stok_encode_mls(**vars(parse_args()))
