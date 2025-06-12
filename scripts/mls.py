@@ -23,7 +23,7 @@ from tqdm import tqdm
 
 
 # Constants
-MLS_SIZES = {"train": 10_808_037, "dev": 3_807, "test": 3_769}
+MLS_SPLIT_SIZES = {"train": 10_808_037, "dev": 3_807, "test": 3_769}
 DEVICE = torch.device("cuda")  # leave GPU assignment to Slurm
 
 # SpeechTokenizer Model
@@ -46,7 +46,7 @@ def parse_args() -> Namespace:
     parser.add_argument("--output_jsonl", type=Path)
     args = parser.parse_args()
 
-    if args.idx_block < 0 or args.idx_block * args.block_size >= MLS_SIZES[args.split]:
+    if args.idx_block < 0 or args.idx_block * args.block_size >= MLS_SPLIT_SIZES[args.split]:
         raise ValueError(
             f"Invalid block index {args.idx_block} for split '{args.split}' and block size {args.block_size}."
         )
@@ -75,7 +75,7 @@ def stok_encode_mls(idx_block: int, block_size: int, split: str, output_jsonl: P
     model.eval()
     model.to(DEVICE)
 
-    mls_split_size = MLS_SIZES[split]
+    mls_split_size = MLS_SPLIT_SIZES[split]
     mls_segments = _MLS_SEGMENTS_PATH.format(split)
     mls_audio_dir = Path(_MLS_AUDIO_DIR.format(split))
     n_blocks = ceil(mls_split_size / block_size)
