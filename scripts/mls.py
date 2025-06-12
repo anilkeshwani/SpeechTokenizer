@@ -23,7 +23,7 @@ from tqdm import tqdm
 
 
 # Constants
-MLS_SIZES = {"train": 10_808_037, "dev": 3_807, "test": 3_769}
+MLS_SPLIT_SIZES = {"train": 10_808_037, "dev": 3_807, "test": 3_769}
 DEVICE = torch.device("cuda")  # leave GPU assignment to Slurm
 
 # SpeechTokenizer Model
