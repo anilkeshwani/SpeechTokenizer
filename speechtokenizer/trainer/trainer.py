@@ -258,6 +258,9 @@ class SpeechTokenizerTrainer(nn.Module):
         pkg = torch.load(path, map_location="cpu")
         generator.load_state_dict(pkg["generator"])
         discriminators = {k: self.accelerator.unwrap_model(v) for k, v in self.discriminators.items()}
+        # BUG (upstream): Same lazy map() issue — discriminator state dicts are never actually
+        # loaded. This means continue_train() restores the generator but discriminators restart
+        # from their randomly initialized weights, silently corrupting training resumption.
         map(lambda kv: kv[1].load_state_dict(pkg["discriminators"][kv[0]]), discriminators.items())
 
         if restore_optimizer:
@@ -312,7 +315,11 @@ class SpeechTokenizerTrainer(nn.Module):
     def train(self):
 
         self.generator.train()
-        map(lambda disc: disc.train(), self.discriminators.values())  # TODO is this actually run? (map is lazy)
+        # BUG (upstream): In Python 3 map() returns a lazy iterator, so this never executes.
+        # The discriminators are never set to train mode here. Training still works by accident
+        # because PyTorch modules default to train mode after construction, but if .eval() is
+        # called (e.g. during validation) and control re-enters here, discriminators stay in eval.
+        map(lambda disc: disc.train(), self.discriminators.values())
         step_time_log = {}
 
         steps = int(self.steps.item())
