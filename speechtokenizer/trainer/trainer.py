@@ -405,7 +405,13 @@ class SpeechTokenizerTrainer(nn.Module):
                         step=steps,
                     )
 
-                self.accelerator.wait_for_everyone()  # TODO why sync here?
+                # NOTE (upstream): This barrier synchronises all processes on every training step,
+                # not just on checkpoint steps. It likely exists to ensure all ranks have finished
+                # the current batch before any rank enters the checkpoint block below. However,
+                # the checkpoint block is already guarded by `if self.is_main`, so non-main ranks
+                # would skip it regardless. Moving this inside the checkpoint block (or removing it
+                # entirely) would avoid a per-step sync overhead with no obvious correctness cost.
+                self.accelerator.wait_for_everyone()
 
                 # validate and save model
                 if self.is_main and not (steps % self.save_model_steps) and steps != 0:
