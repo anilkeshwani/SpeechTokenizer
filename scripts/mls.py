@@ -26,14 +26,10 @@ from tqdm import tqdm
 MLS_SPLIT_SIZES = {"train": 10_808_037, "dev": 3_807, "test": 3_769}
 DEVICE = torch.device("cuda")  # leave GPU assignment to Slurm
 
-# SpeechTokenizer Model
-ST_MODEL_DIR = "/mnt/scratch-artemis/anilkeshwani/models/SpeechTokenizer/speechtokenizer_hubert_avg"
-CONFIG_PATH = os.path.join(ST_MODEL_DIR, "config.json")
-CKPT_PATH = os.path.join(ST_MODEL_DIR, "SpeechTokenizer.pt")
-
-# Local MLS Dataset Paths
-_MLS_SEGMENTS_PATH = "/mnt/scratch-artemis/shared/datasets/MLS/{}/segments.txt"
-_MLS_AUDIO_DIR = "/mnt/scratch-artemis/shared/datasets/MLS/{}/audio"
+# Default paths (cluster-specific — override via CLI arguments)
+_DEFAULT_MODEL_DIR = "/mnt/scratch-artemis/anilkeshwani/models/SpeechTokenizer/speechtokenizer_hubert_avg"
+_DEFAULT_MLS_DIR = "/mnt/scratch-artemis/shared/datasets/MLS"
+_DEFAULT_OUTPUT_DIR = "/mnt/scratch-artemis/anilkeshwani/mls-speechtokenizer-jsonl"
 
 
 def parse_args() -> Namespace:
@@ -41,9 +37,22 @@ def parse_args() -> Namespace:
     # Required
     parser.add_argument("idx_block", type=int, help="Block index to process (0-based)")
     parser.add_argument("--split", type=str, required=True, choices=["train", "dev", "test"])
+    # Paths
+    parser.add_argument(
+        "--model_dir", type=Path, default=_DEFAULT_MODEL_DIR,
+        help="Directory containing SpeechTokenizer config.json and checkpoint .pt file",
+    )
+    parser.add_argument(
+        "--mls_dir", type=Path, default=_DEFAULT_MLS_DIR,
+        help="MLS root directory containing {split}/segments.txt and {split}/audio/",
+    )
+    parser.add_argument(
+        "--output_dir", type=Path, default=_DEFAULT_OUTPUT_DIR,
+        help="Root output directory; files written to {output_dir}/{split}/",
+    )
     # Optional
     parser.add_argument("--block_size", type=int, default=100_000)  # ~3:20 (3.3 hours) based on 500 samples/min tested
-    parser.add_argument("--output_jsonl", type=Path)
+    parser.add_argument("--output_jsonl", type=Path, default=None, help="Explicit output path (overrides --output_dir)")
     args = parser.parse_args()
 
     if args.idx_block < 0 or args.idx_block * args.block_size >= MLS_SPLIT_SIZES[args.split]:
@@ -70,14 +79,24 @@ def mls_id_to_path(mls_id: str, audio_dir: Path, suffix: str = ".flac") -> Path:
 
 
 @torch.inference_mode()
-def stok_encode_mls(idx_block: int, block_size: int, split: str, output_jsonl: Path | None):
-    model = SpeechTokenizer.load_from_checkpoint(CONFIG_PATH, CKPT_PATH)
+def stok_encode_mls(
+    idx_block: int,
+    block_size: int,
+    split: str,
+    model_dir: Path,
+    mls_dir: Path,
+    output_dir: Path,
+    output_jsonl: Path | None,
+):
+    config_path = model_dir / "config.json"
+    ckpt_path = model_dir / "SpeechTokenizer.pt"
+    model = SpeechTokenizer.load_from_checkpoint(str(config_path), str(ckpt_path))
     model.eval()
     model.to(DEVICE)
 
     mls_split_size = MLS_SPLIT_SIZES[split]
-    mls_segments = _MLS_SEGMENTS_PATH.format(split)
-    mls_audio_dir = Path(_MLS_AUDIO_DIR.format(split))
+    mls_segments = mls_dir / split / "segments.txt"
+    mls_audio_dir = mls_dir / split / "audio"
     n_blocks = ceil(mls_split_size / block_size)
 
     with open(mls_segments, "r") as f:
@@ -94,7 +113,7 @@ def stok_encode_mls(idx_block: int, block_size: int, split: str, output_jsonl: P
     if output_jsonl is None:
         idx_block_label = str(idx_block + 1).zfill(len(str(n_blocks)))  # NOTE 1-indexed block label
         jsonl_filename = f"{split}-mls-speechtokenizer-{idx_block_label}-of-{n_blocks}.jsonl"
-        output_jsonl = Path("/mnt/scratch-artemis/anilkeshwani/mls-speechtokenizer-jsonl") / split / jsonl_filename
+        output_jsonl = output_dir / split / jsonl_filename
 
     with open(output_jsonl, "x") as f:
         for mls_id in tqdm(mls_ids, desc="Processing MLS with SpeechTokenizer"):
